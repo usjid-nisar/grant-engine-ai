@@ -84,7 +84,7 @@ async def get_page_image(pdf_dir: str, page_number: int):
 
 
 # FastAPI Endpoint: Get All Image URIs for a PDF
-@app.get("/images/document/{pdf_dir}")
+@app.get("/images/{pdf_dir}")
 async def get_document_images(pdf_dir: str):
     images = []
     for root, _, files in os.walk(os.path.join(PDF_BASE_DIR, pdf_dir)):
@@ -121,7 +121,6 @@ def check_figure_sequence(toc_section, image_uris):
                             f"Please analyze the '{toc_section}' section of the document for the following conditions:\n"
                             "1. Verify if all figure numbers are sequential and unique.\n"
                             "2. Verify if all table numbers are sequential and unique.\n"
-                            "3. Check if the section adheres to standard formatting guidelines.\n"
                             f"Document Images: {', '.join(image_uris)}"
                         )
                     }
