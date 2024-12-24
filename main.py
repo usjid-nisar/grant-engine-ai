@@ -1,6 +1,6 @@
 import os
 import requests
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter
 from fastapi.responses import FileResponse
 
 from helpers import create_pdf_directory
@@ -14,9 +14,14 @@ app = FastAPI()
 API_KEY = os.getenv("GENERATIVE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
+# Organize endpoints under proper router prefixes
+pdf_router = APIRouter(prefix="/pdf", tags=["PDF Operations"])
+image_router = APIRouter(prefix="/images", tags=["Image Operations"])
+analysis_router = APIRouter(prefix="/analysis", tags=["Analysis Operations"])
 
-# FastAPI Endpoint: Process PDF and organize images by TOC
-@app.post("/process-pdf/")
+
+# Move PDF processing endpoint
+@pdf_router.post("/process/")
 async def process_pdf(file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
         raise HTTPException(
@@ -41,8 +46,8 @@ async def process_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
 
-# FastAPI Endpoint: Get Image URIs for a Specific TOC Section
-@app.get("/images/toc/{pdf_dir}/{toc_section}")
+# Update image endpoints
+@image_router.get("/{pdf_dir}/toc/{toc_section}")
 async def get_toc_images(pdf_dir: str, toc_section: str):
     # Verify if the PDF directory exists first
     pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
@@ -97,8 +102,7 @@ async def get_toc_images(pdf_dir: str, toc_section: str):
     }
 
 
-# FastAPI Endpoint: Get Image URI for a Specific Page
-@app.get("/images/page/{pdf_dir}/{page_number}")
+@image_router.get("/{pdf_dir}/page/{page_number}")
 async def get_page_image(pdf_dir: str, page_number: int):
     # Verify if the PDF directory exists first
     pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
@@ -139,8 +143,7 @@ async def get_page_image(pdf_dir: str, page_number: int):
         )
 
 
-# FastAPI Endpoint: Get All Image URIs for a PDF
-@app.get("/images/{pdf_dir}")
+@image_router.get("/{pdf_dir}")
 async def get_document_images(pdf_dir: str):
     pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
     if not os.path.exists(pdf_full_path):
@@ -185,8 +188,7 @@ async def get_document_images(pdf_dir: str):
     }
 
 
-# FastAPI Endpoint: Serve an Image
-@app.get("/images/{pdf_dir}/{folder}/{image_name}")
+@image_router.get("/{pdf_dir}/{folder}/{image_name}")
 async def get_image(pdf_dir: str, folder: str, image_name: str):
     image_path = os.path.join(PDF_BASE_DIR, pdf_dir, folder, image_name)
     if not os.path.exists(image_path):
@@ -232,9 +234,9 @@ def check_figure_sequence(toc_section, image_uris):
         )
 
 
-# FastAPI Endpoint: Check conditions for a specific TOC section
-@app.post("/check-condition/toc/")
-async def check_condition_toc(pdf_dir: str, toc_section: str):
+# Move analysis endpoint
+@analysis_router.post("/check-toc/")
+async def check_toc_analysis(pdf_dir: str, toc_section: str):
     section_dir = os.path.join(PDF_BASE_DIR, pdf_dir, toc_section)
     if not os.path.exists(section_dir):
         raise HTTPException(
@@ -261,3 +263,9 @@ async def check_condition_toc(pdf_dir: str, toc_section: str):
         "image_uris": image_uris,
         "gemini_response": gemini_response,
     }
+
+
+# Include routers in the main app
+app.include_router(pdf_router)
+app.include_router(image_router)
+app.include_router(analysis_router)
