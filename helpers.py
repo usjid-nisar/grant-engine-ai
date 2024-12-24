@@ -19,7 +19,8 @@ def get_toc_from_pdf(pdf_path):
 # Utility function to create PDF-specific directory
 def create_pdf_directory(pdf_filename):
     pdf_id = uuid4().hex
-    pdf_dir = os.path.join(PDF_BASE_DIR, f"{pdf_filename}")
+    PDF_NAME = os.path.splitext(pdf_filename)[0]
+    pdf_dir = os.path.join(PDF_BASE_DIR, f"{PDF_NAME}")
     os.makedirs(pdf_dir, exist_ok=True)
     return pdf_dir
 

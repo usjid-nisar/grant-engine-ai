@@ -87,7 +87,6 @@ async def get_page_image(pdf_dir: str, page_number: int):
 @app.get("/images/{pdf_dir}")
 async def get_document_images(pdf_dir: str):
     pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
-
     # Verify if the PDF directory exists
     if not os.path.exists(pdf_full_path):
         raise HTTPException(
