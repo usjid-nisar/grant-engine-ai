@@ -86,16 +86,36 @@ async def get_page_image(pdf_dir: str, page_number: int):
 # FastAPI Endpoint: Get All Image URIs for a PDF
 @app.get("/images/{pdf_dir}")
 async def get_document_images(pdf_dir: str):
+    pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
+
+    # Verify if the PDF directory exists
+    if not os.path.exists(pdf_full_path):
+        raise HTTPException(
+            status_code=404, detail=f"PDF directory '{pdf_dir}' not found"
+        )
+
     images = []
-    for root, _, files in os.walk(os.path.join(PDF_BASE_DIR, pdf_dir)):
+    for root, _, files in os.walk(pdf_full_path):
+        # Get the relative folder path from the PDF directory
+        rel_path = os.path.relpath(root, pdf_full_path)
+
         for file in files:
             if file.endswith((".jpg", ".jpeg", ".png")):
-                images.append(f"/images/{os.path.relpath(root, PDF_BASE_DIR)}/{file}")
+                # Construct URI based on whether we're in the root or a subfolder
+                if rel_path == ".":
+                    # File is in the root PDF directory
+                    image_uri = f"/images/{pdf_dir}/{file}"
+                else:
+                    # File is in a subfolder
+                    image_uri = f"/images/{pdf_dir}/{rel_path}/{file}"
+                images.append(image_uri)
 
     if not images:
-        raise HTTPException(status_code=404, detail="No images found for document")
+        raise HTTPException(
+            status_code=404, detail=f"No images found in directory '{pdf_dir}'"
+        )
 
-    return {"pdf_directory": pdf_dir, "images": images}
+    return {"pdf_directory": pdf_dir, "images": images, "total_images": len(images)}
 
 
 # FastAPI Endpoint: Serve an Image
