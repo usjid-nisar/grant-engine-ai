@@ -10,7 +10,6 @@ from helpers import PDF_BASE_DIR
 # Initialize FastAPI app
 app = FastAPI()
 
-
 # Load Gemini API key from environment variables
 API_KEY = os.getenv("GENERATIVE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
