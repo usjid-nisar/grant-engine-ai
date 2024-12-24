@@ -143,34 +143,46 @@ async def get_page_image(pdf_dir: str, page_number: int):
 @app.get("/images/{pdf_dir}")
 async def get_document_images(pdf_dir: str):
     pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
-    # Verify if the PDF directory exists
     if not os.path.exists(pdf_full_path):
         raise HTTPException(
             status_code=404, detail=f"PDF directory '{pdf_dir}' not found"
         )
 
     images = []
-    for root, _, files in os.walk(pdf_full_path):
+    for root, dirs, files in os.walk(pdf_full_path):
         # Get the relative folder path from the PDF directory
         rel_path = os.path.relpath(root, pdf_full_path)
 
         for file in files:
             if file.endswith((".jpg", ".jpeg", ".png")):
-                # Construct URI based on whether we're in the root or a subfolder
                 if rel_path == ".":
-                    # File is in the root PDF directory
-                    image_uri = f"/images/{pdf_dir}/{file}"
+                    # For files in root directory, use a placeholder folder name
+                    image_uri = f"/images/{pdf_dir}/root/{file}"
                 else:
-                    # File is in a subfolder
+                    # For files in subfolders, use the actual folder path
                     image_uri = f"/images/{pdf_dir}/{rel_path}/{file}"
-                images.append(image_uri)
+                images.append(
+                    {
+                        "uri": image_uri,
+                        "folder": "root" if rel_path == "." else rel_path,
+                        "filename": file,
+                    }
+                )
 
     if not images:
         raise HTTPException(
             status_code=404, detail=f"No images found in directory '{pdf_dir}'"
         )
 
-    return {"pdf_directory": pdf_dir, "images": images, "total_images": len(images)}
+    # Sort images by filename to maintain consistent order
+    images.sort(key=lambda x: x["filename"])
+
+    return {
+        "pdf_directory": pdf_dir,
+        "images": [img["uri"] for img in images],
+        "total_images": len(images),
+        "image_details": images,
+    }
 
 
 # FastAPI Endpoint: Serve an Image
@@ -218,6 +230,7 @@ def check_figure_sequence(toc_section, image_uris):
         raise HTTPException(
             status_code=500, detail=f"Error sending data to Gemini: {str(e)}"
         )
+
 
 # FastAPI Endpoint: Check conditions for a specific TOC section
 @app.post("/check-condition/toc/")
