@@ -7,6 +7,27 @@ from helpers import create_pdf_directory
 from helpers import pdf_to_images_by_toc
 from helpers import PDF_BASE_DIR
 
+# Define the standard sections to check
+STANDARD_SECTIONS = [
+    "Research Strategy",
+    "Specific Aims",
+    "Commercialization Plan",
+    "Facilities",
+    "Vertebrate Animals",
+    "Introduction",
+    "Authentication of Key",
+    "Inclusion of Individuals Across the Lifespan",
+    "Inclusion of Women and Minorities",
+    "Recruitment and Retention Plan",
+    "Study Timeline",
+    "Protection of Human Subjects",
+    "Data and Safety Monitoring Plan",
+    "Overall structure of the study team",
+    "Statistical Design and Power",
+    "Investigational Product",
+]
+
+
 # Initialize FastAPI app
 app = FastAPI()
 
@@ -210,6 +231,9 @@ def check_figure_sequence(toc_section, image_uris):
                             f"Please analyze the '{toc_section}' section of the document for the following conditions:\n"
                             "1. Verify if all figure numbers are sequential and unique.\n"
                             "2. Verify if all table numbers are sequential and unique.\n"
+                            "3. Give an error if there are any figures or tables that are not sequential or not unique.\n"
+                            "Just give me the error message, no other text.\n"
+                            "4. If there are no errors, just say 'No errors found'.\n"
                             f"Document Images: {', '.join(image_uris)}"
                         )
                     }
@@ -234,34 +258,91 @@ def check_figure_sequence(toc_section, image_uris):
         )
 
 
-# Move analysis endpoint
-@analysis_router.post("/check-toc/")
-async def check_toc_analysis(pdf_dir: str, toc_section: str):
-    section_dir = os.path.join(PDF_BASE_DIR, pdf_dir, toc_section)
-    if not os.path.exists(section_dir):
+@analysis_router.post("/check-figure-sequence-sections/")
+async def check_figure_sequence_sections(pdf_dir: str):
+    pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
+    if not os.path.exists(pdf_full_path):
         raise HTTPException(
-            status_code=404,
-            detail=f"TOC section '{toc_section}' not found in PDF directory '{pdf_dir}'",
+            status_code=404, detail=f"PDF directory '{pdf_dir}' not found"
         )
 
-    # Get all images in the TOC section folder
-    image_files = [
-        f for f in os.listdir(section_dir) if f.endswith((".jpg", ".jpeg", ".png"))
-    ]
-    if not image_files:
-        raise HTTPException(status_code=404, detail="No images found in section")
-
-    image_uris = [
-        f"/images/{pdf_dir}/{toc_section}/{image_file}" for image_file in image_files
+    # Get existing directories in the PDF folder
+    existing_sections = [
+        d
+        for d in os.listdir(pdf_full_path)
+        if os.path.isdir(os.path.join(pdf_full_path, d))
     ]
 
-    # Check conditions with Gemini
-    gemini_response = check_figure_sequence(toc_section, image_uris)
+    results = []
+    for section in STANDARD_SECTIONS:
+        # Clean the section name to match directory naming convention
+        section_clean = "".join(c for c in section if c.isalnum() or c in " _-").strip()
+
+        # Check if this section exists in the PDF directory
+        if section_clean in existing_sections:
+            section_dir = os.path.join(pdf_full_path, section_clean)
+
+            # Get all images in the section folder
+            image_files = [
+                f
+                for f in os.listdir(section_dir)
+                if f.endswith((".jpg", ".jpeg", ".png"))
+            ]
+
+            if image_files:
+                # Sort images by page number
+                image_files.sort(key=lambda x: int(x.split("_")[1].split(".")[0]))
+
+                image_uris = [
+                    f"/images/{pdf_dir}/{section_clean}/{image_file}"
+                    for image_file in image_files
+                ]
+
+                try:
+                    gemini_response = check_figure_sequence(section, image_uris)
+                    results.append(
+                        {
+                            "section": section,
+                            "section_clean": section_clean,
+                            "status": "checked",
+                            "image_count": len(image_files),
+                            "gemini_response": gemini_response,
+                        }
+                    )
+                except Exception as e:
+                    results.append(
+                        {
+                            "section": section,
+                            "section_clean": section_clean,
+                            "status": "error",
+                            "error": str(e),
+                        }
+                    )
+            else:
+                results.append(
+                    {
+                        "section": section,
+                        "section_clean": section_clean,
+                        "status": "no_images",
+                    }
+                )
+        else:
+            results.append(
+                {
+                    "section": section,
+                    "section_clean": section_clean,
+                    "status": "section_not_found",
+                }
+            )
 
     return {
-        "toc_section": toc_section,
-        "image_uris": image_uris,
-        "gemini_response": gemini_response,
+        "pdf_directory": pdf_dir,
+        "sections_analyzed": len(results),
+        "sections_found": len(
+            [r for r in results if r["status"] != "section_not_found"]
+        ),
+        "sections_with_images": len([r for r in results if r["status"] == "checked"]),
+        "results": results,
     }
 
 
