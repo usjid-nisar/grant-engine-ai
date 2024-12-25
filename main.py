@@ -1,8 +1,9 @@
 import os
 import requests
+import base64
 from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter
 from fastapi.responses import FileResponse
-
+from fastapi.responses import JSONResponse
 from helpers import create_pdf_directory
 from helpers import pdf_to_images_by_toc
 from helpers import PDF_BASE_DIR
@@ -217,11 +218,74 @@ async def get_image(pdf_dir: str, folder: str, image_name: str):
     return FileResponse(image_path)
 
 
-# Function to send condition check request to Gemini
-def check_figure_sequence(toc_section, image_uris):
+# # Function to send condition check request to Gemini
+# def check_figure_sequence(toc_section, image_uris):
+#     headers = {
+#         "Content-Type": "application/json",
+#     }
+#     data = {
+#         "contents": [
+#             {
+#                 "parts": [
+#                     {
+#                         "text": (
+#                             f"Please analyze the '{toc_section}' section of the document for the following conditions:\n"
+#                             "1. Verify if all figure numbers are sequential and unique.\n"
+#                             "2. Verify if all table numbers are sequential and unique.\n"
+#                             "3. Give an error if there are any figures or tables that are not sequential or not unique.\n"
+#                             "Just give me the error message, no other text.\n"
+#                             "4. If there are no errors, just say 'No errors found'.\n"
+#                             f"Document Images: {', '.join(image_uris)}"
+#                         )
+#                     }
+#                 ]
+#             }
+#         ]
+#     }
+#     url = f"{BASE_URL}?key={API_KEY}"
+
+#     try:
+#         response = requests.post(url, headers=headers, json=data)
+#         if response.status_code == 200:
+#             return response.json()
+#         else:
+#             raise HTTPException(
+#                 status_code=response.status_code,
+#                 detail=f"Gemini API Error: {response.text}",
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500, detail=f"Error sending data to Gemini: {str(e)}"
+#         )
+
+
+# Function to send condition check request to Gemini with image data
+def check_figure_sequence_with_images(toc_section, image_uris):
     headers = {
         "Content-Type": "application/json",
     }
+
+    # Load images and encode them as Base64
+    image_data = []
+    for image_uri in image_uris:
+        image_path = image_uri.lstrip(
+            "/"
+        )  # Remove leading slash to get the correct file path
+        try:
+            with open(image_path, "rb") as image_file:
+                encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
+                image_data.append(
+                    {
+                        "filename": image_path.split("/")[-1],
+                        "data": encoded_image,
+                    }
+                )
+        except Exception as e:
+            return JSONResponse(
+                status_code=500,
+                content={"detail": f"Error reading image '{image_path}': {str(e)}"},
+            )
+
     data = {
         "contents": [
             {
@@ -234,13 +298,14 @@ def check_figure_sequence(toc_section, image_uris):
                             "3. Give an error if there are any figures or tables that are not sequential or not unique.\n"
                             "Just give me the error message, no other text.\n"
                             "4. If there are no errors, just say 'No errors found'.\n"
-                            f"Document Images: {', '.join(image_uris)}"
-                        )
+                        ),
+                        "images": image_data,
                     }
                 ]
             }
         ]
     }
+
     url = f"{BASE_URL}?key={API_KEY}"
 
     try:
