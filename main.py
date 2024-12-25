@@ -227,16 +227,16 @@ def check_figure_sequence(toc_section, image_uris):
         "contents": [
             {
                 "parts": [
-                    {
-                        "text": (
+                    {  "text": (
+
                             f"Please analyze the '{toc_section}' section of the document for the following conditions:\n"
                             "1. Verify if all figure numbers are sequential and unique.\n"
                             "2. Verify if all table numbers are sequential and unique.\n"
                             "3. Give an error if there are any figures or tables that are not sequential or not unique.\n"
-                            "Just give me the error message, no other text.\n"
+                            "Just give me the error message and figure numbers and table numbers that are not sequential or not unique along with the page number and section name, no other text.\n"
                             "4. If there are no errors, just say 'No errors found'.\n"
                             f"Document Images: {', '.join(image_uris)}"
-                        )
+                        ),
                     }
                 ]
             }
@@ -296,7 +296,7 @@ def check_figure_sequence_with_images(toc_section, image_uris):
                             "1. Verify if all figure numbers are sequential and unique.\n"
                             "2. Verify if all table numbers are sequential and unique.\n"
                             "3. Give an error if there are any figures or tables that are not sequential or not unique.\n"
-                            "Just give me the error message, no other text.\n"
+                            "Just give me the error message and figure numbers and table numbers that are not sequential or not unique along with the page number and section name, no other text.\n"
                             "4. If there are no errors, just say 'No errors found'.\n"
                         ),
                         "images": image_data,
