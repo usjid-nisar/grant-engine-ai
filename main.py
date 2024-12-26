@@ -1,6 +1,9 @@
 import os
 import requests
 import base64
+import asyncio
+import datetime
+from typing import List, Dict, Any
 from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
@@ -10,22 +13,10 @@ from helpers import PDF_BASE_DIR
 
 # Define the standard sections to check
 STANDARD_SECTIONS = [
-    "Research Strategy",
-    "Specific Aims",
+    "Research strategy",
     "Commercialization Plan",
-    "Facilities",
     "Vertebrate Animals",
-    "Introduction",
-    "Authentication of Key",
-    "Inclusion of Individuals Across the Lifespan",
-    "Inclusion of Women and Minorities",
-    "Recruitment and Retention Plan",
-    "Study Timeline",
-    "Protection of Human Subjects",
-    "Data and Safety Monitoring Plan",
-    "Overall structure of the study team",
-    "Statistical Design and Power",
-    "Investigational Product",
+    "PHS Human Subjects and Clinical Trials Information",
 ]
 
 
@@ -227,8 +218,8 @@ def check_figure_sequence(toc_section, image_uris):
         "contents": [
             {
                 "parts": [
-                    {  "text": (
-
+                    {
+                        "text": (
                             f"Please analyze the '{toc_section}' section of the document for the following conditions:\n"
                             "1. Verify if all figure numbers are sequential and unique.\n"
                             "2. Verify if all table numbers are sequential and unique.\n"
@@ -408,6 +399,67 @@ async def check_figure_sequence_sections(pdf_dir: str):
         ),
         "sections_with_images": len([r for r in results if r["status"] == "checked"]),
         "results": results,
+    }
+
+
+@analysis_router.post("/check-page-numbers")
+async def check_page_numbers(pdf_dir: str):
+    pdf_full_path = os.path.join(PDF_BASE_DIR, pdf_dir)
+    if not os.path.exists(pdf_full_path):
+        raise HTTPException(
+            status_code=404, detail=f"PDF directory '{pdf_dir}' not found"
+        )
+
+    # Get all page files recursively
+    page_numbers = set()
+    for root, _, files in os.walk(pdf_full_path):
+        for file in files:
+            if file.startswith("page_") and file.endswith(".jpg"):
+                try:
+                    # Extract page number from filename (page_X.jpg)
+                    page_num = int(file.split("_")[1].split(".")[0])
+                    page_numbers.add(page_num)
+                except (IndexError, ValueError):
+                    continue
+
+    if not page_numbers:
+        raise HTTPException(
+            status_code=404, detail=f"No page images found in directory '{pdf_dir}'"
+        )
+
+    # Calculate page statistics
+    start_page = min(page_numbers)
+    end_page = max(page_numbers)
+    total_pages = len(page_numbers)
+
+    # Find missing pages in the range
+    expected_pages = set(range(start_page, end_page + 1))
+    missing_pages = sorted(list(expected_pages - page_numbers))
+
+    return {
+        "pdf_directory": pdf_dir,
+        "start_page": start_page,
+        "end_page": end_page,
+        "total_pages": total_pages,
+        "has_missing_pages": len(missing_pages) > 0,
+        "missing_pages": missing_pages,
+        "page_continuity": {
+            "is_continuous": len(missing_pages) == 0,
+            "gaps": (
+                [
+                    (
+                        {"start": missing_pages[i], "end": missing_pages[i]}
+                        if i == len(missing_pages) - 1
+                        or missing_pages[i + 1] != missing_pages[i] + 1
+                        else {"start": missing_pages[i], "end": missing_pages[i + 1]}
+                    )
+                    for i in range(len(missing_pages))
+                    if i == 0 or missing_pages[i] != missing_pages[i - 1] + 1
+                ]
+                if missing_pages
+                else []
+            ),
+        },
     }
 
 
